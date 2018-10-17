@@ -12,8 +12,11 @@
 #include <QJsonDocument>
 #include <QUrl>
 #include <QMessageBox>
+#include <QDesktopWidget>
 
 #include <QFile>
+
+#include "zip/zip.h"
 
 using namespace std;
 
@@ -28,6 +31,7 @@ MainWindow::MainWindow(QWidget *parent) :
     m_status = NONE;
 
     Initialization();
+
     RequestVersion();
 
     if(CheckVersion())
@@ -52,7 +56,7 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-void MainWindow::Initialization()
+bool MainWindow::Initialization()
 {
     //m_fileSettings = QCoreApplication::applicationDirPath() +"/Config.ini";
 
@@ -67,6 +71,8 @@ void MainWindow::Initialization()
     ui->label->setText(GetStatusString(m_status));
 
     ui->progressBar->setValue(0);
+
+    return true;
 }
 
 QString MainWindow::GetStatusString(eSTATUS status)
@@ -87,8 +93,14 @@ void MainWindow::ReadSetting()
     bool exists = file.exists();
     if(!exists)
     {
-        int ret = QMessageBox::critical(NULL, "Erro", "Não foi possível encontrar o arquivo Config.ini", QMessageBox::Ok, QMessageBox::Ok);
-        QApplication::quit();
+        QMessageBox m( QMessageBox::Critical, "Erro", "Não foi encontrada o arquivo Config.ini !", QMessageBox::NoButton, this );
+
+        QSize mSize = m.sizeHint();
+        QRect screenRect = QDesktopWidget().screen()->rect();
+        m.move( QPoint( screenRect.width()/2 - mSize.width()/2, screenRect.height()/2 - mSize.height()/2 ) );
+        m.exec();
+
+        exit(1);
     }
 
     QSettings settings(m_fileSettings, QSettings::IniFormat);
@@ -126,8 +138,14 @@ void MainWindow::RequestVersion()
     }
     else
     {
-        int ret = QMessageBox::critical(NULL, "Erro", "Não foi possivel carregar o json", QMessageBox::Ok, QMessageBox::Ok);
-        QApplication::quit();
+        QMessageBox m( QMessageBox::Critical, "Erro", "Não foi possível carregar o json data !", QMessageBox::NoButton, this );
+
+        QSize mSize = m.sizeHint();
+        QRect screenRect = QDesktopWidget().screen()->rect();
+        m.move( QPoint( screenRect.width()/2 - mSize.width()/2, screenRect.height()/2 - mSize.height()/2 ) );
+        m.exec();
+
+        exit(1);
     }
 
     delete reply;
@@ -158,12 +176,17 @@ void MainWindow::RequestDownload()
 QString MainWindow::ConvertBytesToString(double bytes)
 {
     QString unit;
-    if (bytes < 1024) {
+    if (bytes < 1024)
+    {
         unit = "bytes/sec";
-    } else if (bytes < 1024*1024) {
+    }
+    else if (bytes < 1024*1024)
+    {
         bytes /= 1024;
         unit = "kB/s";
-    } else {
+    }
+    else
+    {
         bytes /= 1024*1024;
         unit = "MB/s";
     }
@@ -196,5 +219,30 @@ void MainWindow::BytesDownloaded(qint64 bytesReceived, qint64 bytesTotal, double
     message += speedDownload;
 
     ui->label->setText(message);
+}
+
+int on_extract_entry(const char *filename, void *arg)
+{
+    static int i = 0;
+    int n = *(int *)arg;
+    printf("Extracted: %s (%d of %d)\n", filename, ++i, n);
+
+    return 0;
+}
+
+bool MainWindow::ExtractPackage()
+{
+    int arg = 2;
+    QByteArray array =  QCoreApplication::applicationDirPath().toLocal8Bit();
+    char* buffer = array.data();
+    int status = zip_extract("/home/litwin/DELETE/cemu_1.12.0.zip", buffer, on_extract_entry, &arg);
+    if(status == 0)
+    {
+
+    }
+    else
+    {
+
+    }
 }
 

@@ -31,10 +31,13 @@ SOURCES += \
         main.cpp \
         mainwindow.cpp \
     downloadmanager.cpp \
+    zip/zip.c
 
 HEADERS += \
         mainwindow.h \
     downloadmanager.h \
+    zip/miniz.h \
+    zip/zip.h
 
 FORMS += \
         mainwindow.ui

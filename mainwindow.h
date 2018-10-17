@@ -32,13 +32,15 @@ public slots:
     void DownloadFinished();
 
 private:
-    void Initialization();
+    bool Initialization();
     void ReadSetting();
 
     void RequestVersion();
     void RequestDownload();
 
     bool CheckVersion();
+
+    bool ExtractPackage();
 
     QString GetStatusString(eSTATUS status);
     QString ConvertBytesToString(double bytes);
