@@ -16,7 +16,10 @@
 
 #include <QFile>
 
-#include "zip/zip.h"
+//#include "zip/zip.h"
+//#include "zip/miniz.h"
+
+#include "miniz/miniz.h"
 
 using namespace std;
 
@@ -29,6 +32,9 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->setupUi(this);
 
     m_status = NONE;
+
+    //ExtractPackage();
+    //return;
 
     Initialization();
 
@@ -159,6 +165,16 @@ bool MainWindow::CheckVersion()
 void MainWindow::DownloadFinished()
 {
     ui->label->setText("Download realizado com sucesso.");
+
+    if(ExtractPackage())
+    {
+        // Update setting file.
+        QSettings settings(m_fileSettings, QSettings::IniFormat);
+        settings.beginGroup("Config");
+        m_currentVersion = settings.value("CurrentVersion", "").toString();
+        settings.setValue("CurrentVersion", m_webCurrentVersion);
+        settings.endGroup();
+    }
 }
 
 void MainWindow::RequestDownload()
@@ -221,28 +237,120 @@ void MainWindow::BytesDownloaded(qint64 bytesReceived, qint64 bytesTotal, double
     ui->label->setText(message);
 }
 
-int on_extract_entry(const char *filename, void *arg)
+bool MainWindow::CheckPackage(const QString& sZipFilePath)
 {
-    static int i = 0;
-    int n = *(int *)arg;
-    printf("Extracted: %s (%d of %d)\n", filename, ++i, n);
+    mz_zip_archive* mz = new mz_zip_archive;
+    mz_zip_zero_struct(mz);
 
-    return 0;
+    mz_bool ok = mz_zip_reader_init_file(mz, sZipFilePath.toUtf8().data(), 0);
+    if (!ok) return false;
+
+    int num = mz_zip_reader_get_num_files(mz);
+
+    mz_zip_reader_end(mz);
+    return (num > 0);
 }
 
 bool MainWindow::ExtractPackage()
 {
-    int arg = 2;
-    QByteArray array =  QCoreApplication::applicationDirPath().toLocal8Bit();
-    char* buffer = array.data();
-    int status = zip_extract("/home/litwin/DELETE/cemu_1.12.0.zip", buffer, on_extract_entry, &arg);
-    if(status == 0)
-    {
+    m_status = DECOMPRESSING;
+    ui->label->setText(GetStatusString(m_status));
 
-    }
-    else
-    {
+    QString zipFilePath = "/home/litwin/DELETE/cemu_1.12.0.zip";
+    //QString destPath = QCoreApplication::applicationDirPath();
 
+    if (!QFile::exists(zipFilePath))
+    {
+        return false;
     }
+
+    if(!CheckPackage(zipFilePath))
+    {
+        return false;
+    }
+
+    //QString sBaseDir = QFileInfo(destPath).absolutePath();
+    QString sBaseDir = QCoreApplication::applicationDirPath();
+    QDir baseDir(sBaseDir);
+    if (!baseDir.exists())
+    {
+        bool ok = baseDir.mkpath(".");
+        Q_ASSERT(ok);
+    }
+
+    baseDir.makeAbsolute();
+
+    mz_zip_archive* mz = new mz_zip_archive;
+    mz_zip_zero_struct(mz);
+
+    mz_bool ok = mz_zip_reader_init_file(mz, zipFilePath.toUtf8().data(), 0);
+    if (!ok)
+    {
+        return false;
+    }
+
+    int num = mz_zip_reader_get_num_files(mz);
+
+    ui->progressBar->setRange(0, 100);
+
+    mz_zip_archive_file_stat* stat = new mz_zip_archive_file_stat;
+
+    for (int i = 0; i < num; ++i)
+    {
+        ok &= mz_zip_reader_file_stat(mz, i, stat);
+
+        if (stat->m_is_directory)
+        {
+            QString sFolderPath = QString::fromUtf8(stat->m_filename);
+            qDebug() << QString("Make Dir: ").append(sFolderPath);
+
+            bool mkDirOK = baseDir.mkpath(sFolderPath);
+            Q_ASSERT(mkDirOK);
+            if (!mkDirOK)
+            {
+                qDebug() << "Make Dir failed";
+            }
+        }
+    }
+
+    int percent = 0;
+    ui->progressBar->setValue(percent);
+
+    for (int i = 0; i < num; ++i)
+    {
+        percent = i * 100 / num;
+        ui->progressBar->setValue(percent);
+
+        ok &= mz_zip_reader_file_stat(mz, i, stat);
+
+        if (!stat->m_is_directory)
+        {
+            QString sFullPath = baseDir.filePath(QString::fromUtf8(stat->m_filename));
+            qDebug() << QString("Unzip file: ").append(sFullPath);
+            bool b = QFileInfo(sFullPath).absoluteDir().mkpath(".");
+            Q_ASSERT(b);
+
+            bool extractOK = mz_zip_reader_extract_to_file(mz, i, sFullPath.toUtf8(), 0);
+            if (!extractOK)
+            {
+                ok = false;
+                qDebug() << "  File extraction failed.";
+            }
+        }
+    }
+
+    ui->progressBar->setValue(100);
+
+    mz_zip_reader_end(mz);
+
+    if (!ok)
+    {
+        qDebug() << "Unzip error!";
+    }
+
+    m_status = FINISHED;
+    ui->label->setText(GetStatusString(m_status));
+
+    return true;
 }
 

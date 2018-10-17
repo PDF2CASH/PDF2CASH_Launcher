@@ -40,6 +40,8 @@ private:
 
     bool CheckVersion();
 
+    /// Package functions
+    bool CheckPackage(const QString& sZipFilePath);
     bool ExtractPackage();
 
     QString GetStatusString(eSTATUS status);
@@ -58,6 +60,9 @@ private:
     QString m_webCurrentVersion;
 
     DownloadManager* m_downloaderMgr;
+
+    uint m_maxFiles = 0;
+    uint m_currentFiles = 0;
 };
 
 #endif // MAINWINDOW_H
